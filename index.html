@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShopAdmin – Hệ Thống Quản Lý Bán Hàng</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+
+    <!-- Overlay mobile sidebar -->
+    <div class="overlay" id="overlay"></div>
+
+    <div class="container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <h2>ShopAdmin</h2>
+            <ul>
+                <li class="active" data-route="/"><i class="fas fa-home"></i> Tổng quan</li>
+                <li data-route="/products"><i class="fas fa-box"></i> Sản phẩm</li>
+                <li data-route="/orders"><i class="fas fa-shopping-cart"></i> Đơn hàng</li>
+                <li data-route="/customers"><i class="fas fa-users"></i> Khách hàng</li>
+                <li data-route="/reports"><i class="fas fa-chart-line"></i> Báo cáo</li>
+            </ul>
+        </aside>
+
+        <!-- Vùng nội dung động -->
+        <main class="main-content" id="main-content">
+            <div style="display:flex;justify-content:center;align-items:center;height:100vh;color:#999;flex-direction:column;gap:12px;">
+                <i class="fas fa-spinner fa-spin" style="font-size:2rem;"></i>
+                <p>Đang tải ứng dụng...</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Entry point duy nhất — Vite + ES Modules -->
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>
