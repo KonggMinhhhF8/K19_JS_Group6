@@ -22,6 +22,22 @@ api.interceptors.request.use(config => {
     return Promise.reject(error);
 });
 
+// Response Interceptor: Xử lý lỗi xác thực (Token hết hạn hoặc không hợp lệ)
+api.interceptors.response.use(response => {
+    return response;
+}, error => {
+    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+        console.warn('Token không hợp lệ hoặc đã hết hạn, đăng xuất...');
+        localStorage.removeItem('API_TOKEN');
+        localStorage.removeItem('REFRESH_TOKEN');
+        if (window.router) {
+            window.router.navigate('/login');
+        }
+    }
+    return Promise.reject(error);
+});
+
+
 // Định dạng tiền tệ VND
 export function formatCurrency(value) {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Math.round(value)).replace(/\s?₫/, 'đ');
@@ -40,77 +56,61 @@ export function normalizeDate(str) {
     return isNaN(p) ? str : p.toISOString().split('T')[0];
 }
 
-// Dữ liệu mock mặc định phòng trường hợp API lỗi/không có dữ liệu
-const DEFAULT_PRODUCTS = [
-    { id: 1, name: "iPhone 15 Pro Max", price: 32500000, sku: "IP15PM", stock: 10 },
-    { id: 2, name: "AirPods Pro", price: 5500000, sku: "APP2", stock: 20 },
-    { id: 3, name: "Ốp lưng Silicon", price: 250000, sku: "CASE", stock: 50 },
-    { id: 4, name: "Sạc nhanh 20W", price: 490000, sku: "CHARGER", stock: 100 }
-];
+// Loại bỏ dấu tiếng Việt để phục vụ tìm kiếm không dấu
+export function removeVietnameseTones(str) {
+    if (!str) return '';
+    let result = str.toLowerCase();
+    result = result.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
+    result = result.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e");
+    result = result.replace(/ì|í|ị|ỉ|ĩ/g, "i");
+    result = result.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, "o");
+    result = result.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, "u");
+    result = result.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, "y");
+    result = result.replace(/đ/g, "d");
+    result = result.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return result;
+}
 
-const DEFAULT_CUSTOMERS = [
-    { id: 1, name: "Nguyễn Anh", phone: "0912345678", email: "anh.nguyen@email.com", tier: "gold", ordersCount: 25, totalSpend: 45200000 },
-    { id: 2, name: "Trần Lan", phone: "0988777999", email: "lan.tran@email.com", tier: "silver", ordersCount: 12, totalSpend: 18500000 },
-    { id: 3, name: "Vũ Duy", phone: "0355999222", email: "duy.vu@email.com", tier: "bronze", ordersCount: 3, totalSpend: 2100000 }
-];
 
 // Lớp dịch vụ API chính của dự án
 export const apiService = {
-    // SẢN PHẨM (Có fallback local nếu API lỗi)
+    // XÁC THỰC
+    auth: {
+        async login(email, password) {
+            const response = await api.post('/auth/signin', { email, password });
+            return response.data;
+        }
+    },
+
+    // SẢN PHẨM
     products: {
         async getAll() {
-            try {
-                const response = await api.get('/products');
-                return response.data || DEFAULT_PRODUCTS;
-            } catch (error) {
-                console.warn('API products gặp lỗi, trả về mock data:', error.message);
-                return DEFAULT_PRODUCTS;
-            }
+            const response = await api.get('/products');
+            return response.data || [];
         }
     },
 
-    // KHÁCH HÀNG (Có fallback local nếu API lỗi)
+    // KHÁCH HÀNG
     customers: {
         async getAll() {
-            try {
-                const response = await api.get('/customers');
-                return response.data || DEFAULT_CUSTOMERS;
-            } catch (error) {
-                console.warn('API customers gặp lỗi, trả về mock data:', error.message);
-                return DEFAULT_CUSTOMERS;
-            }
+            const response = await api.get('/customers');
+            return response.data || [];
         }
     },
 
-    // ĐƠN HÀNG (Sử dụng hoàn toàn API server)
+    // ĐƠN HÀNG
     orders: {
         async getAll() {
-            try {
-                const response = await api.get('/orders');
-                return response.data || [];
-            } catch (error) {
-                console.warn('API orders gặp lỗi, trả về danh sách rỗng:', error.message);
-                // Không có fallback local cho orders — trả mảng rỗng thay vì crash app
-                return [];
-            }
+            const response = await api.get('/orders');
+            return response.data || [];
         },
         async create(orderData) {
-            try {
-                const response = await api.post('/orders', orderData);
-                return response.data;
-            } catch (error) {
-                console.error("Lỗi khi tạo đơn hàng trên API:", error);
-                throw error;
-            }
+            const response = await api.post('/orders', orderData);
+            return response.data;
         },
         async update(id, orderData) {
-            try {
-                const response = await api.put(`/orders/${id}`, orderData);
-                return response.data;
-            } catch (error) {
-                console.error(`Lỗi khi cập nhật đơn hàng #${id} trên API:`, error);
-                throw error;
-            }
+            const response = await api.put(`/orders/${id}`, orderData);
+            return response.data;
         }
     }
 };

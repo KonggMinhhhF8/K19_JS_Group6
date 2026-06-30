@@ -1,12 +1,16 @@
-import { apiService, formatCurrency, normalizeDate } from '../api.js';
+import { apiService, formatCurrency, normalizeDate, removeVietnameseTones } from '../api.js';
 
 const STATUS_TEXT = {
-    pending: 'Chờ duyệt', approved: 'Đã duyệt',
-    delivering: 'Đang giao', done: 'Hoàn thành', cancel: 'Đã hủy'
+    pending: 'Chờ xử lý',
+    delivering: 'Đang giao',
+    done: 'Hoàn thành',
+    cancel: 'Đã hủy'
 };
 const STATUS_BADGE = {
-    pending: 'badge pending', approved: 'badge approved',
-    delivering: 'badge shipping', done: 'badge completed', cancel: 'badge cancelled'
+    pending: 'badge pending',
+    delivering: 'badge shipping',
+    done: 'badge completed',
+    cancel: 'badge cancelled'
 };
 
 const OrdersView = {
@@ -18,7 +22,7 @@ const OrdersView = {
         return `
             <header>
                 <div class="search-bar">
-                    <input type="text" id="orderSearchInput" placeholder="Tìm mã đơn, tên khách hàng...">
+                    <input type="text" id="orderSearchInput" placeholder="Tìm mã đơn, tên khách hàng,SĐT...">
                 </div>
                 <div style="display:flex;gap:10px;">
                     <button class="btn-export" style="background:var(--success);" id="btnOpenCreateOrder">
@@ -143,6 +147,7 @@ const OrdersView = {
         document.getElementById('orderDateFilter')?.addEventListener('change', e => {
             this.dateFilter = e.target.value; this.filterAndRender();
         });
+        document.getElementById('btnExportExcel')?.addEventListener('click', () => this.exportToCSV());
 
         // Create modal
         document.getElementById('btnOpenCreateOrder')?.addEventListener('click', () => this.openCreateModal());
@@ -171,18 +176,28 @@ const OrdersView = {
             this.filterAndRender();
         } catch (e) {
             console.error('Lỗi tải đơn hàng:', e);
-            document.getElementById('orderTableBody').innerHTML = `
-                <tr><td colspan="6" style="text-align:center;padding:30px;color:var(--danger);font-weight:bold;">
-                    <i class="fas fa-exclamation-triangle"></i> Không thể tải dữ liệu đơn hàng!
-                </td></tr>`;
+            const tbody = document.getElementById('orderTableBody');
+            if (tbody) {
+                tbody.innerHTML = `
+                    <tr><td colspan="6" style="text-align:center;padding:30px;color:var(--danger);font-weight:bold;">
+                        <i class="fas fa-exclamation-triangle"></i> Không thể tải dữ liệu đơn hàng!
+                    </td></tr>`;
+            }
         }
     },
 
     _renderStats() {
-        document.getElementById('statTotalOrders').textContent = this.orders.length;
-        document.getElementById('statPendingOrders').textContent = this.orders.filter(o => ['pending', 'approved', 'delivering'].includes(o.status)).length;
-        document.getElementById('statCompletedOrders').textContent = this.orders.filter(o => o.status === 'done').length;
-        document.getElementById('statCancelledOrders').textContent = this.orders.filter(o => o.status === 'cancel').length;
+        const totalEl = document.getElementById('statTotalOrders');
+        const pendingEl = document.getElementById('statPendingOrders');
+        const completedEl = document.getElementById('statCompletedOrders');
+        const cancelledEl = document.getElementById('statCancelledOrders');
+
+        if (!totalEl || !pendingEl || !completedEl || !cancelledEl) return;
+
+        totalEl.textContent = this.orders.length;
+        pendingEl.textContent = this.orders.filter(o => ['pending', 'delivering'].includes(o.status)).length;
+        completedEl.textContent = this.orders.filter(o => o.status === 'done').length;
+        cancelledEl.textContent = this.orders.filter(o => o.status === 'cancel').length;
     },
 
     filterAndRender() {
@@ -190,19 +205,18 @@ const OrdersView = {
         if (!tbody) return;
 
         let list = [...this.orders];
-        if (this.activeTab === 'pending') list = list.filter(o => ['pending', 'approved'].includes(o.status));
+        if (this.activeTab === 'pending') list = list.filter(o => o.status === 'pending');
         if (this.activeTab === 'shipping') list = list.filter(o => o.status === 'delivering');
         if (this.activeTab === 'completed') list = list.filter(o => o.status === 'done');
 
         if (this.searchQuery) {
-            const q = this.searchQuery.toLowerCase().trim();
-            list = list.filter(o =>
-                String(o.id).includes(q) ||
-                `ord-${o.id}`.includes(q) ||
-                `#ord-${o.id}`.includes(q) ||
-                o.customer?.name?.toLowerCase().includes(q) ||
-                o.customer?.phone?.toLowerCase().includes(q)
-            );
+            const q = removeVietnameseTones(this.searchQuery.trim());
+            list = list.filter(o => {
+                const idMatch = String(o.id).includes(q) || `ord-${o.id}`.includes(q) || `#ord-${o.id}`.includes(q);
+                const nameMatch = o.customer?.name ? removeVietnameseTones(o.customer.name).includes(q) : false;
+                const phoneMatch = o.customer?.phone ? o.customer.phone.includes(q) : false;
+                return idMatch || nameMatch || phoneMatch;
+            });
         }
         if (this.dateFilter) {
             list = list.filter(o => normalizeDate(o.date) === this.dateFilter);
@@ -224,9 +238,17 @@ const OrdersView = {
             let actions = `
                 <button class="btn-action" onclick="OrdersView.viewOrderDetails(${order.id})" title="Xem chi tiết"><i class="fas fa-eye"></i></button>
             `;
-            if (order.status === 'pending') actions += `<button class="btn-action" onclick="OrdersView.updateOrderStatus(${order.id},'approved')" style="color:var(--success);" title="Duyệt đơn"><i class="fas fa-check-circle"></i></button><button class="btn-action" onclick="OrdersView.cancelOrder(${order.id})" style="color:var(--danger);" title="Hủy đơn"><i class="fas fa-times"></i></button>`;
-            if (order.status === 'approved') actions += `<button class="btn-action" onclick="OrdersView.updateOrderStatus(${order.id},'delivering')" style="color:var(--primary-color);" title="Giao hàng"><i class="fas fa-truck"></i></button><button class="btn-action" onclick="OrdersView.cancelOrder(${order.id})" style="color:var(--danger);" title="Hủy đơn"><i class="fas fa-times"></i></button>`;
-            if (order.status === 'delivering') actions += `<button class="btn-action" onclick="OrdersView.updateOrderStatus(${order.id},'done')" style="color:var(--success);" title="Hoàn thành"><i class="fas fa-check"></i></button><button class="btn-action" onclick="OrdersView.cancelOrder(${order.id})" style="color:var(--danger);" title="Hủy đơn"><i class="fas fa-times"></i></button>`;
+            if (order.status === 'pending') {
+                actions += `
+                    <button class="btn-action" onclick="OrdersView.updateOrderStatus(${order.id},'delivering')" style="color:var(--primary-color);" title="Giao hàng"><i class="fas fa-truck"></i></button>
+                    <button class="btn-action" onclick="OrdersView.cancelOrder(${order.id})" style="color:var(--danger);" title="Hủy đơn"><i class="fas fa-times"></i></button>
+                `;
+            } else if (order.status === 'delivering') {
+                actions += `
+                    <button class="btn-action" onclick="OrdersView.updateOrderStatus(${order.id},'done')" style="color:var(--success);" title="Hoàn thành"><i class="fas fa-check"></i></button>
+                    <button class="btn-action" onclick="OrdersView.cancelOrder(${order.id})" style="color:var(--danger);" title="Hủy đơn"><i class="fas fa-times"></i></button>
+                `;
+            }
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
@@ -244,10 +266,11 @@ const OrdersView = {
     async updateOrderStatus(orderId, newStatus) {
         const order = this.orders.find(o => o.id === orderId);
         if (!order) return;
-        if (['approved', 'delivering'].includes(newStatus)) {
+        if (newStatus === 'delivering') {
             const prod = this.products.find(p => p.id === order.product?.id);
-            if (prod && prod.stock < (order.amount || 1)) {
-                alert(`Không đủ hàng! "${prod.name}" còn ${prod.stock} sản phẩm.`); return;
+            const stock = prod ? (prod.remaining ?? prod.stock ?? 0) : 0;
+            if (prod && stock < (order.amount || 1)) {
+                alert(`Không đủ hàng! "${prod.name}" còn ${stock} sản phẩm.`); return;
             }
         }
         try {
@@ -259,7 +282,7 @@ const OrdersView = {
             });
             alert(`Đã cập nhật đơn hàng #${orderId}!`);
             await this.loadInitialData();
-        } catch (e) { alert('Lỗi cập nhật: ' + e.message); }
+        } catch (e) { alert('Lỗi cập nhật: ' + (e.response?.data?.message || e.message)); }
     },
 
     async cancelOrder(id) {
@@ -333,17 +356,51 @@ const OrdersView = {
             alert('Vui lòng điền đầy đủ thông tin hợp lệ'); return;
         }
         const prod = this.products.find(p => p.id === prodId);
-        if (prod && prod.stock < amount) {
-            alert(`Không đủ hàng! "${prod.name}" còn ${prod.stock} sản phẩm.`); return;
+        const stock = prod ? (prod.remaining ?? prod.stock ?? 0) : 0;
+        if (prod && stock < amount) {
+            alert(`Không đủ hàng! "${prod.name}" còn ${stock} sản phẩm.`); return;
         }
         try {
             await apiService.orders.create({ productId: prodId, customerId: custId, amount, status: 'pending' });
             this.closeCreateModal();
             alert('Tạo đơn hàng thành công!');
             await this.loadInitialData();
-        } catch (err) { alert('Không thể tạo đơn hàng: ' + err.message); }
+        } catch (err) { alert('Không thể tạo đơn hàng: ' + (err.response?.data?.message || err.message)); }
     },
 
+    exportToCSV() {
+        if (this.orders.length === 0) {
+            alert('Không có dữ liệu để xuất!');
+            return;
+        }
+
+        let csvContent = '\uFEFF';
+        csvContent += 'Mã Đơn,Khách Hàng,Số Điện Thoại,Sản Phẩm,Số Lượng,Đơn Giá,Tổng Tiền,Ngày Đặt,Trạng Thái\n';
+
+        this.orders.forEach(order => {
+            const id = `#ORD-${order.id}`;
+            const custName = `"${(order.customer?.name ?? 'N/A').replace(/"/g, '""')}"`;
+            const custPhone = `'${order.customer?.phone ?? 'N/A'}`;
+            const prodName = `"${(order.product?.name ?? 'N/A').replace(/"/g, '""')}"`;
+            const amount = order.amount || 1;
+            const price = order.product?.price ?? 0;
+            const total = price * amount;
+            const dateStr = order.date ? new Date(normalizeDate(order.date)).toLocaleDateString('vi-VN') : '—';
+            const statusStr = STATUS_TEXT[order.status] || order.status;
+
+            csvContent += `${id},${csvName},${custPhone},${prodName},${amount},${price},${total},${dateStr},${statusStr}\n`;
+        });
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `danh_sach_don_hang_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
 
 };
 

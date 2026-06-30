@@ -8,7 +8,7 @@ const DashboardView = {
                 <div class="user"><strong>Admin</strong> <i class="fas fa-user-circle"></i></div>
             </header>
 
-            <section class="stats">
+            <section class="stats" id="dashboard-stats">
                 <div class="card" style="border-left-color: #3498db;">
                     <h3>Doanh thu</h3>
                     <p style="color: #3498db;">...</p>
@@ -68,17 +68,24 @@ const DashboardView = {
     },
 
     _renderStats(orders, products) {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        const todayStr = `${year}-${month}-${day}`;
+
         const doneOrders = orders.filter(o => o.status === 'done');
         const totalRevenue = doneOrders.reduce((sum, o) => {
             return sum + (o.product ? o.product.price * (o.amount || 1) : 0);
         }, 0);
-        const pendingCount  = orders.filter(o => o.status === 'pending').length;
-        const outOfStock    = products.filter(p => p.stock <= 0).length;
+        
+        const newOrdersCount = orders.filter(o => normalizeDate(o.date) === todayStr).length;
+        const outOfStock    = products.filter(p => (p.remaining ?? p.stock ?? 0) <= 0).length;
 
-        const pEls = document.querySelectorAll('.stats .card p');
+        const pEls = document.querySelectorAll('#dashboard-stats .card p');
         if (pEls.length >= 3) {
             pEls[0].textContent = formatCurrency(totalRevenue);
-            pEls[1].textContent = pendingCount;
+            pEls[1].textContent = newOrdersCount;
             pEls[2].textContent = outOfStock;
         }
     },
@@ -132,7 +139,7 @@ const DashboardView = {
     },
 
     _renderError() {
-        document.querySelectorAll('.stats .card p').forEach(p => {
+        document.querySelectorAll('#dashboard-stats .card p').forEach(p => {
             p.textContent = 'Lỗi';
             p.style.color = '#e74c3c';
         });
