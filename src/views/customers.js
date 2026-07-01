@@ -1,36 +1,21 @@
 import {
-    getCustomers,
-    getCustomerById,
-    createCustomer,
-    updateCustomer,
-    deleteCustomer,
+    customerApi,
+    clearAuthSession,
 } from "../api.js";
 
+// PAGE STATE
+
 const customerState = {
+    customers: [],
     search: "",
     tier: "all",
+    loading: false,
+    error: "",
 };
 
-export function renderCustomersPage(root, path) {
-    const pathParts = path.split("/").filter(Boolean);
+// RENDER CUSTOMER LIST PAGE
 
-    const action = pathParts[1];
-    const customerId = pathParts[2];
-
-    if (action === "create") {
-        renderCustomerFormPage(root);
-        return;
-    }
-
-    if (action === "edit") {
-        renderCustomerFormPage(root, customerId);
-        return;
-    }
-
-    renderCustomerListPage(root);
-}
-
-function renderCustomerListPage(root) {
+export async function renderCustomersPage(root, router) {
     root.innerHTML = `
     <header>
       <div class="search-bar">
@@ -42,7 +27,7 @@ function renderCustomerListPage(root) {
         >
       </div>
 
-      <a href="#/customers/create" class="btn-add">
+      <a href="/customers/create" class="btn-add" data-navigo>
         <i class="fas fa-user-plus"></i>
         Thêm khách hàng
       </a>
@@ -89,31 +74,43 @@ function renderCustomerListPage(root) {
           </tr>
         </thead>
 
-        <tbody id="customerTableBody"></tbody>
+        <tbody id="customerTableBody">
+          <tr>
+            <td colspan="6" class="empty-state">
+              Đang tải dữ liệu khách hàng...
+            </td>
+          </tr>
+        </tbody>
       </table>
     </section>
   `;
 
+    router.updatePageLinks();
+
+    bindCustomerListEvents(router);
+    await loadCustomers(router);
+}
+
+// BIND LIST EVENTS
+
+function bindCustomerListEvents(router) {
     const searchInput = document.getElementById("customerSearchInput");
     const tierFilter = document.getElementById("tierFilter");
     const tableBody = document.getElementById("customerTableBody");
 
     tierFilter.value = customerState.tier;
 
-    renderCustomerStats();
-    renderCustomerRows();
-
     searchInput.addEventListener("input", function (event) {
         customerState.search = event.target.value;
-        renderCustomerRows();
+        renderCustomerRows(router);
     });
 
     tierFilter.addEventListener("change", function (event) {
         customerState.tier = event.target.value;
-        renderCustomerRows();
+        renderCustomerRows(router);
     });
 
-    tableBody.addEventListener("click", function (event) {
+    tableBody.addEventListener("click", async function (event) {
         const deleteButton = event.target.closest("[data-delete-id]");
 
         if (!deleteButton) {
@@ -122,27 +119,60 @@ function renderCustomerListPage(root) {
 
         const customerId = deleteButton.dataset.deleteId;
 
-        const confirmed = confirm("Bạn có chắc chắn muốn xóa khách hàng này?");
+        const confirmed = confirm("Bạn có chắc chắn muốn xóa khách hàng này không?");
 
         if (!confirmed) {
             return;
         }
 
-        deleteCustomer(customerId);
-
-        renderCustomerStats();
-        renderCustomerRows();
-
-        alert("Xóa khách hàng thành công");
+        try {
+            await customerApi.remove(customerId);
+            alert("Xóa khách hàng thành công");
+            await loadCustomers(router);
+        } catch (error) {
+            handleApiError(error, router);
+        }
     });
 }
 
+// LOAD CUSTOMERS
+
+async function loadCustomers(router) {
+    try {
+        customerState.loading = true;
+        customerState.error = "";
+
+        const response = await customerApi.getAll();
+
+        customerState.customers = normalizeCustomerListResponse(response);
+
+        renderCustomerStats();
+        renderCustomerRows(router);
+    } catch (error) {
+        if (isAuthError(error)) {
+            handleApiError(error, router);
+            return;
+        }
+
+        customerState.error = error.message || "Không thể tải danh sách khách hàng";
+        renderCustomerError(customerState.error);
+    } finally {
+        customerState.loading = false;
+    }
+}
+
+// RENDER STATS
+
 function renderCustomerStats() {
-    const customers = getCustomers();
+    const customers = customerState.customers;
 
     const totalCustomersElement = document.getElementById("totalCustomers");
     const newCustomersElement = document.getElementById("newCustomers");
     const returnRateElement = document.getElementById("returnRate");
+
+    if (!totalCustomersElement || !newCustomersElement || !returnRateElement) {
+        return;
+    }
 
     const totalCustomers = customers.length;
 
@@ -164,8 +194,15 @@ function renderCustomerStats() {
     returnRateElement.textContent = returnRate + "%";
 }
 
-function renderCustomerRows() {
+// RENDER TABLE ROWS
+
+function renderCustomerRows(router) {
     const tableBody = document.getElementById("customerTableBody");
+
+    if (!tableBody) {
+        return;
+    }
+
     const customers = getFilteredCustomers();
 
     if (customers.length === 0) {
@@ -217,9 +254,10 @@ function renderCustomerRows() {
 
           <td>
             <a 
-              href="#/customers/edit/${encodeURIComponent(customer.id)}"
+              href="/customers/edit/${encodeURIComponent(customer.id)}"
               class="btn-action"
               title="Sửa"
+              data-navigo
             >
               <i class="fas fa-user-edit"></i>
             </a>
@@ -237,31 +275,99 @@ function renderCustomerRows() {
       `;
         })
         .join("");
+
+    if (router) {
+        router.updatePageLinks();
+    }
 }
 
-function renderCustomerFormPage(root, customerId = null) {
-    const isEditMode = Boolean(customerId);
-    const customer = isEditMode ? getCustomerById(customerId) : null;
+function renderCustomerError(message) {
+    const tableBody = document.getElementById("customerTableBody");
 
-    if (isEditMode && !customer) {
+    if (!tableBody) {
+        return;
+    }
+
+    tableBody.innerHTML = `
+    <tr>
+      <td colspan="6" class="empty-state error-text">
+        ${escapeHTML(message)}
+      </td>
+    </tr>
+  `;
+}
+
+// CREATE PAGE
+
+export function renderCustomerCreatePage(root, router) {
+    renderCustomerFormPage(root, router);
+}
+
+// EDIT PAGE
+
+export async function renderCustomerEditPage(root, router, customerId) {
+    root.innerHTML = `
+    <div class="page-header">
+      <h2>Đang tải khách hàng...</h2>
+
+      <a href="/customers" class="btn-secondary" data-navigo>
+        <i class="fas fa-arrow-left"></i>
+        Quay lại
+      </a>
+    </div>
+  `;
+
+    router.updatePageLinks();
+
+    try {
+        const response = await customerApi.getAll();
+        const customers = normalizeCustomerListResponse(response);
+
+        const customer = customers.find(function (item) {
+            return String(item.id) === String(customerId);
+        });
+
+        if (!customer) {
+            throw new Error("Không tìm thấy khách hàng");
+        }
+
+        renderCustomerFormPage(root, router, customer);
+    } catch (error) {
+        if (isAuthError(error)) {
+            handleApiError(error, router);
+            return;
+        }
+
         root.innerHTML = `
       <div class="page-header">
         <h2>Không tìm thấy khách hàng</h2>
 
-        <a href="#/customers" class="btn-secondary">
+        <a href="/customers" class="btn-secondary" data-navigo>
           <i class="fas fa-arrow-left"></i>
           Quay lại
         </a>
       </div>
+
+      <section class="card">
+        <h3>Lỗi</h3>
+        <p>${escapeHTML(error.message || "Không thể tải khách hàng")}</p>
+      </section>
     `;
-        return;
+
+        router.updatePageLinks();
     }
+}
+
+// FORM PAGE
+
+function renderCustomerFormPage(root, router, customer = null) {
+    const isEditMode = Boolean(customer?.id);
 
     root.innerHTML = `
     <div class="page-header">
       <h2>${isEditMode ? "Sửa khách hàng" : "Thêm khách hàng"}</h2>
 
-      <a href="#/customers" class="btn-secondary">
+      <a href="/customers" class="btn-secondary" data-navigo>
         <i class="fas fa-arrow-left"></i>
         Quay lại
       </a>
@@ -347,7 +453,7 @@ function renderCustomerFormPage(root, customerId = null) {
             : ""
     }
 
-          <a href="#/customers" class="btn-secondary">
+          <a href="/customers" class="btn-secondary" data-navigo>
             Hủy
           </a>
 
@@ -360,46 +466,116 @@ function renderCustomerFormPage(root, customerId = null) {
     </section>
   `;
 
+    router.updatePageLinks();
+
     const form = document.getElementById("customerForm");
     const deleteButton = document.getElementById("deleteCustomerButton");
 
-    form.addEventListener("submit", function (event) {
+    form.addEventListener("submit", async function (event) {
         event.preventDefault();
 
         const formData = getCustomerFormData(form);
-
-        const isValid = validateCustomerForm(form, formData, customerId);
+        const isValid = validateCustomerForm(form, formData);
 
         if (!isValid) {
             return;
         }
 
-        if (isEditMode) {
-            updateCustomer(customerId, formData);
-            alert("Cập nhật khách hàng thành công");
-        } else {
-            createCustomer(formData);
-            alert("Thêm khách hàng thành công");
-        }
+        try {
+            const payload = buildCustomerPayload(formData);
 
-        window.location.hash = "#/customers";
+            if (isEditMode) {
+                await customerApi.update(customer.id, payload);
+                alert("Cập nhật khách hàng thành công");
+            } else {
+                await customerApi.create(payload);
+                alert("Thêm khách hàng thành công");
+            }
+
+            router.navigate("/customers");
+        } catch (error) {
+            handleApiError(error, router);
+        }
     });
 
     if (deleteButton) {
-        deleteButton.addEventListener("click", function () {
-            const confirmed = confirm("Bạn có chắc chắn muốn xóa khách hàng này?");
+        deleteButton.addEventListener("click", async function () {
+            const confirmed = confirm("Bạn có chắc chắn muốn xóa khách hàng này không?");
 
             if (!confirmed) {
                 return;
             }
 
-            deleteCustomer(customerId);
-            alert("Xóa khách hàng thành công");
-
-            window.location.hash = "#/customers";
+            try {
+                await customerApi.remove(customer.id);
+                alert("Xóa khách hàng thành công");
+                router.navigate("/customers");
+            } catch (error) {
+                handleApiError(error, router);
+            }
         });
     }
 }
+
+// API ERROR HANDLING
+
+function isAuthError(error) {
+    return error?.status === 401 || error?.status === 403;
+}
+
+function handleApiError(error, router) {
+    if (isAuthError(error)) {
+        clearAuthSession();
+        alert("Phiên đăng nhập hết hạn hoặc không có quyền truy cập. Vui lòng đăng nhập lại.");
+        router.navigate("/login");
+        return;
+    }
+
+    alert(error.message || "Đã có lỗi xảy ra");
+}
+
+// API RESPONSE NORMALIZATION
+
+function normalizeCustomerListResponse(response) {
+    if (Array.isArray(response)) {
+        return response.map(normalizeCustomer);
+    }
+
+    if (Array.isArray(response?.data)) {
+        return response.data.map(normalizeCustomer);
+    }
+
+    if (Array.isArray(response?.customers)) {
+        return response.customers.map(normalizeCustomer);
+    }
+
+    if (Array.isArray(response?.items)) {
+        return response.items.map(normalizeCustomer);
+    }
+
+    return [];
+}
+
+function normalizeCustomer(customer = {}) {
+    return {
+        id: String(customer.id || customer._id || customer.customerId || ""),
+        name: String(customer.name || customer.fullName || customer.customerName || ""),
+        email: String(customer.email || ""),
+        phone: String(customer.phone || customer.phoneNumber || ""),
+        orders: Number(customer.orders || customer.ordersCount || customer.totalOrders || 0),
+        totalSpent: Number(
+            customer.totalSpent ||
+            customer.total_spent ||
+            customer.spent ||
+            customer.totalAmount ||
+            0
+        ),
+        createdAt: customer.createdAt || customer.created_at || new Date().toISOString(),
+        updatedAt: customer.updatedAt || customer.updated_at || new Date().toISOString(),
+    };
+}
+
+// FORM HELPERS
 
 function getCustomerFormData(form) {
     const formData = new FormData(form);
@@ -413,7 +589,17 @@ function getCustomerFormData(form) {
     };
 }
 
-function validateCustomerForm(form, data, currentCustomerId) {
+function buildCustomerPayload(formData) {
+    return {
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        orders: formData.orders,
+        totalSpent: formData.totalSpent,
+    };
+}
+
+function validateCustomerForm(form, data) {
     clearErrors(form);
 
     let isValid = true;
@@ -428,18 +614,8 @@ function validateCustomerForm(form, data, currentCustomerId) {
         isValid = false;
     }
 
-    if (isEmailDuplicated(data.email, currentCustomerId)) {
-        setError(form, "email", "Email này đã tồn tại");
-        isValid = false;
-    }
-
     if (!isValidPhone(data.phone)) {
         setError(form, "phone", "Số điện thoại phải có từ 9 đến 11 chữ số");
-        isValid = false;
-    }
-
-    if (isPhoneDuplicated(data.phone, currentCustomerId)) {
-        setError(form, "phone", "Số điện thoại này đã tồn tại");
         isValid = false;
     }
 
@@ -486,12 +662,12 @@ function setError(form, fieldName, message) {
     }
 }
 
+// FILTER HELPERS
+
 function getFilteredCustomers() {
-    const customers = getCustomers();
+    const searchValue = normalizeText(customerState.search);
 
-    return customers.filter(function (customer) {
-        const searchValue = normalizeText(customerState.search);
-
+    return customerState.customers.filter(function (customer) {
         const name = normalizeText(customer.name);
         const email = normalizeText(customer.email);
         const phone = normalizeText(customer.phone);
@@ -510,6 +686,8 @@ function getFilteredCustomers() {
         return matchesSearch && matchesTier;
     });
 }
+
+// COMMON HELPERS
 
 function getCustomerTier(totalSpent) {
     const spent = Number(totalSpent);
@@ -561,30 +739,6 @@ function isValidPhone(phone) {
     const digits = normalizePhone(phone);
 
     return digits.length >= 9 && digits.length <= 11;
-}
-
-function isEmailDuplicated(email, currentCustomerId) {
-    const customers = getCustomers();
-    const normalizedEmail = String(email).trim().toLowerCase();
-
-    return customers.some(function (customer) {
-        return (
-            customer.email.toLowerCase() === normalizedEmail &&
-            customer.id !== currentCustomerId
-        );
-    });
-}
-
-function isPhoneDuplicated(phone, currentCustomerId) {
-    const customers = getCustomers();
-    const normalizedPhone = normalizePhone(phone);
-
-    return customers.some(function (customer) {
-        return (
-            normalizePhone(customer.phone) === normalizedPhone &&
-            customer.id !== currentCustomerId
-        );
-    });
 }
 
 function normalizeText(value) {

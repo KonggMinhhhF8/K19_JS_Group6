@@ -8,6 +8,10 @@
     "build": "vite build",
     "preview": "vite preview"
   },
+  "dependencies": {
+    "axios": "latest",
+    "navigo": "latest"
+  },
   "devDependencies": {
     "vite": "latest"
   }

@@ -1,5 +1,6 @@
 :root {
     --primary-color: #3498db;
+    --primary-dark: #217dbb;
     --dark-color: #2c3e50;
     --bg-color: #f4f7f6;
     --gold: #f1c40f;
@@ -37,6 +38,8 @@ body {
     position: sticky;
     top: 0;
     height: 100vh;
+    display: flex;
+    flex-direction: column;
 }
 
 .sidebar h2 {
@@ -47,6 +50,7 @@ body {
 
 .sidebar ul {
     list-style: none;
+    flex: 1;
 }
 
 .sidebar li {
@@ -75,6 +79,37 @@ body {
 .sidebar i {
     margin-right: 12px;
     width: 20px;
+}
+
+.sidebar-footer {
+    padding-top: 20px;
+    border-top: 1px solid #3b5268;
+}
+
+.logout-btn {
+    width: 100%;
+    border: none;
+    background: #e74c3c;
+    color: white;
+    padding: 12px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.logout-btn:hover {
+    background: #c0392b;
+}
+
+.is-logged-out .sidebar {
+    display: none;
+}
+
+.is-logged-out .main-content {
+    padding: 0;
 }
 
 .main-content {
@@ -130,14 +165,32 @@ header {
     color: white;
 }
 
+.btn-add:hover,
+.btn-primary:hover {
+    background: var(--primary-dark);
+}
+
+.btn-primary:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
 .btn-secondary {
     background: #ecf0f1;
     color: #2c3e50;
 }
 
+.btn-secondary:hover {
+    background: #dde4e8;
+}
+
 .btn-danger {
     background: var(--danger);
     color: white;
+}
+
+.btn-danger:hover {
+    background: #c0392b;
 }
 
 .stats {
@@ -187,6 +240,7 @@ header {
     padding: 8px;
     border-radius: 5px;
     border: 1px solid #ddd;
+    background: white;
 }
 
 table {
@@ -334,6 +388,57 @@ small {
     text-align: center;
     padding: 30px;
     color: var(--text-muted);
+}
+
+.error-text {
+    color: var(--danger);
+}
+
+/* LOGIN PAGE */
+
+.login-page {
+    min-height: 100vh;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #2c3e50, #3498db);
+    padding: 20px;
+}
+
+.login-card {
+    width: 100%;
+    max-width: 420px;
+    background: white;
+    padding: 32px;
+    border-radius: 16px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 28px;
+}
+
+.login-header h1 {
+    color: var(--primary-color);
+    margin-bottom: 8px;
+}
+
+.login-header p {
+    color: var(--text-muted);
+}
+
+.login-submit {
+    width: 100%;
+    margin-top: 18px;
+}
+
+.login-error {
+    color: var(--danger);
+    margin-top: 16px;
+    text-align: center;
+    font-size: 0.9rem;
 }
 
 @media (max-width: 992px) {

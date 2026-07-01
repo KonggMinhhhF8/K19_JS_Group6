@@ -1,149 +1,210 @@
-const CUSTOMER_STORAGE_KEY = "shopadmin_customers";
+import axios from "axios";
 
-const defaultCustomers = [
-    {
-        id: "CUST-001",
-        name: "Nguyễn Anh",
-        email: "anh.nguyen@email.com",
-        phone: "0912.345.678",
-        orders: 25,
-        totalSpent: 45200000,
-        createdAt: "2026-06-01T08:00:00.000Z",
-        updatedAt: "2026-06-01T08:00:00.000Z",
-    },
-    {
-        id: "CUST-002",
-        name: "Trần Lan",
-        email: "lan.tran@email.com",
-        phone: "0988.777.666",
-        orders: 12,
-        totalSpent: 18500000,
-        createdAt: "2026-06-12T08:00:00.000Z",
-        updatedAt: "2026-06-12T08:00:00.000Z",
-    },
-    {
-        id: "CUST-003",
-        name: "Vũ Duy",
-        email: "duy.vu@email.com",
-        phone: "0355.999.888",
-        orders: 3,
-        totalSpent: 2100000,
-        createdAt: "2026-05-20T08:00:00.000Z",
-        updatedAt: "2026-05-20T08:00:00.000Z",
-    },
-];
+const API_BASE_URL = "https://wo365ovs53.execute-api.ap-southeast-1.amazonaws.com";
 
-function initCustomers() {
-    const rawCustomers = localStorage.getItem(CUSTOMER_STORAGE_KEY);
+const AUTH_SIGNIN_ENDPOINT = "/auth/signin";
+const AUTH_REFRESH_TOKEN_ENDPOINT = "/auth/refresh-token";
 
-    if (!rawCustomers) {
-        localStorage.setItem(
-            CUSTOMER_STORAGE_KEY,
-            JSON.stringify(defaultCustomers)
-        );
-    }
-}
+const CUSTOMER_ENDPOINT = "/customers";
 
-function readCustomers() {
-    initCustomers();
+const ACCESS_TOKEN_KEY = "shopadmin_access_token";
+const REFRESH_TOKEN_KEY = "shopadmin_refresh_token";
+const USER_KEY = "shopadmin_user";
 
-    try {
-        const customers = JSON.parse(localStorage.getItem(CUSTOMER_STORAGE_KEY));
+export const apiClient = axios.create({
+    baseURL: API_BASE_URL,
+    timeout: 15000,
+});
 
-        return Array.isArray(customers) ? customers : [];
-    } catch {
-        return [];
-    }
-}
+// REQUEST INTERCEPTOR
+// Trước mỗi request, nếu đã có accessToken thì tự động gắn vào header.
+apiClient.interceptors.request.use(function (config) {
+    const token = getAccessToken();
 
-function writeCustomers(customers) {
-    localStorage.setItem(CUSTOMER_STORAGE_KEY, JSON.stringify(customers));
-}
-
-function generateCustomerId(customers) {
-    if (customers.length === 0) {
-        return "CUST-001";
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
     }
 
-    const maxNumber = customers.reduce(function (max, customer) {
-        const currentNumber = Number(String(customer.id).replace("CUST-", ""));
+    return config;
+});
 
-        return Number.isNaN(currentNumber)
-            ? max
-            : Math.max(max, currentNumber);
-    }, 0);
+// RESPONSE INTERCEPTOR
+// Chuẩn hóa response và error.
+// Nếu API trả 401 thì thử refresh token một lần.
+apiClient.interceptors.response.use(
+    function handleSuccess(response) {
+        return response.data;
+    },
 
-    return "CUST-" + String(maxNumber + 1).padStart(3, "0");
-}
+    async function handleError(error) {
+        const originalRequest = error.config;
 
-export function getCustomers() {
-    return readCustomers();
-}
+        const isUnauthorized = error.response?.status === 401;
+        const hasNotRetried = !originalRequest?._retry;
+        const hasRefreshToken = Boolean(getRefreshToken());
 
-export function getCustomerById(customerId) {
-    const customers = readCustomers();
+        if (isUnauthorized && hasNotRetried && hasRefreshToken) {
+            originalRequest._retry = true;
 
-    return customers.find(function (customer) {
-        return customer.id === customerId;
-    });
-}
+            try {
+                const refreshResponse = await authApi.refreshToken();
 
-export function createCustomer(payload) {
-    const customers = readCustomers();
-    const now = new Date().toISOString();
+                const newAccessToken = extractAccessToken(refreshResponse);
+                const newRefreshToken = extractRefreshToken(refreshResponse);
 
-    const newCustomer = {
-        id: generateCustomerId(customers),
-        name: payload.name,
-        email: payload.email,
-        phone: payload.phone,
-        orders: Number(payload.orders),
-        totalSpent: Number(payload.totalSpent),
-        createdAt: now,
-        updatedAt: now,
-    };
+                if (!newAccessToken) {
+                    throw new Error("Refresh token không trả về access token mới");
+                }
 
-    customers.push(newCustomer);
+                saveAuthSession({
+                    accessToken: newAccessToken,
+                    refreshToken: newRefreshToken || getRefreshToken(),
+                    user: getCurrentUser(),
+                });
 
-    writeCustomers(customers);
+                originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
 
-    return newCustomer;
-}
-
-export function updateCustomer(customerId, payload) {
-    const customers = readCustomers();
-
-    const updatedCustomers = customers.map(function (customer) {
-        if (customer.id !== customerId) {
-            return customer;
+                return apiClient(originalRequest);
+            } catch {
+                clearAuthSession();
+            }
         }
 
-        return {
-            ...customer,
-            name: payload.name,
-            email: payload.email,
-            phone: payload.phone,
-            orders: Number(payload.orders),
-            totalSpent: Number(payload.totalSpent),
-            updatedAt: new Date().toISOString(),
-        };
-    });
+        console.error("API ERROR DETAIL:", {
+            url: error.config?.url,
+            method: error.config?.method,
+            baseURL: error.config?.baseURL,
+            status: error.response?.status,
+            responseData: error.response?.data,
+        });
 
-    writeCustomers(updatedCustomers);
+        const message =
+            error.response?.data?.message ||
+            error.response?.data?.error ||
+            error.response?.data ||
+            error.message ||
+            "Đã có lỗi xảy ra khi gọi API";
 
-    return getCustomerById(customerId);
+        return Promise.reject({
+            status: error.response?.status,
+            message,
+            responseData: error.response?.data,
+            originalError: error,
+        });
+    }
+);
+
+// AUTH STORAGE
+
+export function getAccessToken() {
+    return localStorage.getItem(ACCESS_TOKEN_KEY);
 }
 
-export function deleteCustomer(customerId) {
-    const customers = readCustomers();
-
-    const updatedCustomers = customers.filter(function (customer) {
-        return customer.id !== customerId;
-    });
-
-    writeCustomers(updatedCustomers);
+export function getRefreshToken() {
+    return localStorage.getItem(REFRESH_TOKEN_KEY);
 }
 
-export function resetCustomers() {
-    writeCustomers(defaultCustomers);
+export function isAuthenticated() {
+    return Boolean(getAccessToken());
+}
+
+export function saveAuthSession({ accessToken, refreshToken, user }) {
+    if (accessToken) {
+        localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+    }
+
+    if (refreshToken) {
+        localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+    }
+
+    if (user) {
+        localStorage.setItem(USER_KEY, JSON.stringify(user));
+    }
+}
+
+export function clearAuthSession() {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+}
+
+export function getCurrentUser() {
+    try {
+        return JSON.parse(localStorage.getItem(USER_KEY));
+    } catch {
+        return null;
+    }
+}
+
+// AUTH API
+
+export const authApi = {
+    signin(payload) {
+        return apiClient.post(AUTH_SIGNIN_ENDPOINT, payload);
+    },
+
+    refreshToken() {
+        return apiClient.post(AUTH_REFRESH_TOKEN_ENDPOINT, {
+            refreshToken: getRefreshToken(),
+        });
+    },
+};
+
+// CUSTOMER API
+
+export const customerApi = {
+    // GET /customers
+    getAll() {
+        return apiClient.get(CUSTOMER_ENDPOINT);
+    },
+
+    // POST /customers
+    create(payload) {
+        return apiClient.post(CUSTOMER_ENDPOINT, payload);
+    },
+
+    // PUT /customers/{id}
+    update(customerId, payload) {
+        return apiClient.put(`${CUSTOMER_ENDPOINT}/${customerId}`, payload);
+    },
+
+    // DELETE /customers/{id}
+    remove(customerId) {
+        return apiClient.delete(`${CUSTOMER_ENDPOINT}/${customerId}`);
+    },
+};
+
+// AUTH RESPONSE HELPERS
+
+export function extractAccessToken(response) {
+    return (
+        response?.accessToken ||
+        response?.access_token ||
+        response?.token ||
+        response?.jwt ||
+        response?.data?.accessToken ||
+        response?.data?.access_token ||
+        response?.data?.token ||
+        ""
+    );
+}
+
+export function extractRefreshToken(response) {
+    return (
+        response?.refreshToken ||
+        response?.refresh_token ||
+        response?.data?.refreshToken ||
+        response?.data?.refresh_token ||
+        ""
+    );
+}
+
+export function extractUser(response) {
+    return (
+        response?.user ||
+        response?.data?.user ||
+        response?.profile ||
+        response?.data?.profile ||
+        null
+    );
 }
