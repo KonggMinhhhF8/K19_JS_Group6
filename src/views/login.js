@@ -1,15 +1,16 @@
 import {
     authApi,
-    extractAccessToken,
-    extractRefreshToken,
-    extractUser,
     saveAuthSession,
 } from "../api.js";
 
-// LOGIN PAGE
-// Render trang đăng nhập.
-// API hiện tại dùng:
+// RENDER LOGIN PAGE
+// Trang login dùng API:
 // POST /auth/signin
+// Body gửi lên:
+// {
+//   email,
+//   password
+// }
 
 export function renderLoginPage(root, router) {
     root.innerHTML = `
@@ -76,30 +77,12 @@ export function renderLoginPage(root, router) {
 
             const payload = buildSigninPayload(formData);
 
-            console.log("SIGNIN PAYLOAD:", payload);
-
             const response = await authApi.signin(payload);
 
-            console.log("SIGNIN RESPONSE:", response);
-
-            const accessToken = extractAccessToken(response);
-            const refreshToken = extractRefreshToken(response);
-            const user = extractUser(response);
-
-            if (!accessToken) {
-                throw new Error("API signin thành công nhưng không trả về access token");
-            }
-
-            saveAuthSession({
-                accessToken,
-                refreshToken,
-                user,
-            });
+            saveAuthSession(response);
 
             router.navigate("/customers");
         } catch (error) {
-            console.error("LOGIN ERROR:", error);
-
             loginError.textContent =
                 error.message || "Email hoặc mật khẩu không đúng.";
         } finally {
@@ -108,7 +91,7 @@ export function renderLoginPage(root, router) {
     });
 }
 
-// GET LOGIN FORM DATA
+// GET FORM DATA
 
 function getLoginFormData(form) {
     const formData = new FormData(form);
@@ -195,6 +178,7 @@ function setLoginLoading(isLoading) {
     }
 
     button.disabled = isLoading;
+
     button.innerHTML = isLoading
         ? `<i class="fas fa-spinner fa-spin"></i> Đang đăng nhập...`
         : `<i class="fas fa-sign-in-alt"></i> Đăng nhập`;

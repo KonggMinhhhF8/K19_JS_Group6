@@ -19,13 +19,16 @@ import {
 import { renderReportsPage } from "./views/reports.js";
 
 const app = document.getElementById("app");
-const logoutButton = document.getElementById("logoutButton");
+
+const logoutButton =
+    document.getElementById("logoutButton") ||
+    document.getElementById("logout-btn");
 
 const router = new Navigo("/", {
     linksSelector: "a[data-navigo]",
 });
 
-// SIDEBAR ACTIVE STATE
+// SIDEBAR ACTIVE
 
 function setActiveSidebar(currentPath) {
     const links = document.querySelectorAll(".sidebar a");
@@ -45,12 +48,20 @@ function setActiveSidebar(currentPath) {
 // AUTH UI
 
 function updateAuthUI() {
-    document.body.classList.toggle("is-logged-out", !isAuthenticated());
+    const sidebar = document.querySelector(".sidebar");
+
+    if (sidebar) {
+        sidebar.style.display = isAuthenticated() ? "flex" : "none";
+    }
 
     if (logoutButton) {
         logoutButton.style.display = isAuthenticated() ? "flex" : "none";
     }
+
+    document.body.classList.toggle("is-logged-out", !isAuthenticated());
 }
+
+// LOGOUT
 
 function handleLogout() {
     const confirmed = confirm("Bạn có chắc chắn muốn đăng xuất không?");
@@ -69,7 +80,6 @@ if (logoutButton) {
 }
 
 // ROUTE GUARD
-// Các route bên trong app phải đăng nhập mới được vào.
 
 function renderProtectedPage(activePath, callback) {
     if (!isAuthenticated()) {
@@ -79,14 +89,18 @@ function renderProtectedPage(activePath, callback) {
 
     setActiveSidebar(activePath);
     updateAuthUI();
+
     callback();
+
     router.updatePageLinks();
 }
 
 function renderPublicPage(callback) {
     setActiveSidebar("");
     updateAuthUI();
+
     callback();
+
     router.updatePageLinks();
 }
 
