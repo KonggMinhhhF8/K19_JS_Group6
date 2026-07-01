@@ -1,19 +1,17 @@
-import {logout} from "../services/authService.js";
-import router from "../router/index.js";
+
 import { getProducts } from "../services/productService";
 
 const render = () => {
     return `
-        <h1>Dashboard</h1>
-        <button id="logout-btn">
-            Logout
-        </button>
-    `;
-};
+         <div class="page-header">
+      <h2>Tổng quan</h2>
+    </div>
 
-const handleLogout = () => {
-    logout();
-    router.navigate("/login");
+    <section class="card">
+      <h3>Dashboard</h3>
+      <p>Trang này của thành viên khác.</p>
+    </section>
+    `;
 };
 
 const init = async () => {
@@ -23,12 +21,6 @@ const init = async () => {
     } catch (error) {
         console.log(error);
     }
-    document
-        .getElementById("logout-btn")
-        .addEventListener(
-            "click",
-            handleLogout
-        );
 };
 
 export default {

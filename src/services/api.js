@@ -2,6 +2,7 @@ import axios from "axios";
 import {getAccessToken,getRefreshToken,clearToken,saveToken} from "../utils/tokenStorage.js";
 import { refresh } from "./refreshService";
 import {authGuard} from "../router/guards.js";
+import router from "../router/index.js";
 
 
 
@@ -51,10 +52,16 @@ api.interceptors.response.use(
             originalRequest._retry = true;
 
             try{
+                const refreshToken = getRefreshToken();
 
+                if (!refreshToken) {
+                    clearToken();
+                    router.navigate("/login");
+                    return Promise.reject(error);
+                }
                 const response =
                     await refresh(
-                        getRefreshToken()
+                        refreshToken
                     );
 
                 saveToken(
@@ -71,7 +78,7 @@ api.interceptors.response.use(
 
                 clearToken();
 
-                authGuard()
+                router.navigate("/login");
 
                 return Promise.reject(
                     refreshError

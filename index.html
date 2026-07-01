@@ -2,12 +2,63 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <title>shop-admin</title>
   </head>
   <body>
-    <div id="app"></div>
+    <div class="container">
+      <aside class="sidebar">
+        <h2>ShopAdmin</h2>
+
+        <ul>
+          <li>
+            <a href="/dashboard">
+              <i class="fas fa-home"></i>
+              Tổng quan
+            </a>
+          </li>
+
+          <li>
+            <a href="/products">
+              <i class="fas fa-box"></i>
+              Sản phẩm
+            </a>
+          </li>
+
+          <li>
+            <a href="/orders">
+              <i class="fas fa-shopping-cart"></i>
+              Đơn hàng
+            </a>
+          </li>
+
+          <li>
+            <a href="/customers">
+              <i class="fas fa-users"></i>
+              Khách hàng
+            </a>
+          </li>
+
+          <li>
+            <a href="/reports">
+              <i class="fas fa-chart-line"></i>
+              Báo cáo
+            </a>
+          </li>
+
+        </ul>
+        <div class="sidebar-footer">
+          <a href="#" id="logout-btn" class="logout-btn">
+            <i class="fas fa-sign-out-alt"></i>
+            Đăng xuất
+          </a>
+        </div>
+      </aside>
+      <!--      phần nội dung-->
+      <main id="app" class="main-content"></main>
+    </div>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

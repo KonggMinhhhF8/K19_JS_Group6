@@ -3,7 +3,6 @@ import router from "./index";
 
 const authGuard = () => {
     if (!isLoginIn()) {
-        clearToken();
         router.navigate("/login");
         return false;
     }

@@ -3,40 +3,54 @@ import router from "../router";
 
 const render = () => {
     return `
-        <div class="login-container">
-            <h2>Đăng nhập</h2>
+       <section class="login-page">
+    <div class="login-card">
 
-            <form id="login-form">
-                <div>
-                    <label>Email</label>
-                    <input
-                        type="email"
-                        id="email"
-                        placeholder="Nhập email"
-                    >
-                </div>
+        <div class="login-header">
+            <i class="fas fa-store"></i>
 
-                <div>
-                    <label>Password</label>
-                    <input
-                        type="password"
-                        id="password"
-                        placeholder="Nhập password"
-                    >
-                </div>
+            <h2>ShopAdmin</h2>
 
-                <button type="submit">
-                    Đăng nhập
-                </button>
-            </form>
-
-            <div id="login-error"></div>
+            <p>Hệ thống quản lý bán hàng</p>
         </div>
+        
+        <form id="login-form">
+
+            <div class="form-group">
+                <label>Email</label>
+
+                <input
+                    id="email"
+                    type="email"
+                    placeholder="Nhập email"
+                >
+            </div>
+
+            <div class="form-group">
+                <label>Mật khẩu</label>
+
+                <input
+                    id="password"
+                    type="password"
+                    placeholder="Nhập mật khẩu"
+                >
+            </div>
+            <p id="login-error" class="login-error"></p>
+            <button type="submit">
+                Đăng nhập
+            </button>
+
+        </form>
+
+    </div>
+</section>
     `;
 };
 
 const showPopupError = (message) => {
     const errorElement = document.getElementById("login-error");
+
+    if (!errorElement) return;
 
     errorElement.textContent = message;
 };
