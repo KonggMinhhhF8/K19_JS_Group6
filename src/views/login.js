@@ -1,100 +1,92 @@
-import { apiService } from '../api.js';
+import { login } from "../services/authService.js";
+import router from "../router";
 
-const LoginView = {
-    render() {
-        return `
-            <div class="login-container">
-                <div class="login-card">
-                    <div class="login-header">
-                        <div class="login-logo">
-                            <i class="fas fa-shopping-bag"></i>
-                        </div>
-                        <h2>ShopAdmin</h2>
-                        <p>Hệ Thống Quản Lý Bán Hàng</p>
-                    </div>
-                    <form id="loginForm" class="login-form">
-                        <div class="form-group-login">
-                            <label for="email"><i class="fas fa-envelope"></i> Email</label>
-                            <input type="email" id="email" placeholder="Nhập email (ví dụ: admin@email.com)" required autocomplete="email">
-                        </div>
-                        <div class="form-group-login">
-                            <label for="password"><i class="fas fa-lock"></i> Mật khẩu</label>
-                            <input type="password" id="password" placeholder="Nhập mật khẩu" required autocomplete="current-password">
-                        </div>
-                        <div id="loginError" class="login-error" style="display: none;">
-                            <i class="fas fa-exclamation-circle"></i> <span id="loginErrorMessage">Tài khoản hoặc mật khẩu không đúng!</span>
-                        </div>
-                        <button type="submit" class="btn-login" id="btnLoginSubmit">
-                            <span>Đăng Nhập</span>
-                            <i class="fas fa-arrow-right"></i>
-                        </button>
-                    </form>
-                    <div class="login-footer">
-                        <p>K19 JS Group 6 &copy; 2026</p>
-                    </div>
+const render = () => {
+    return `
+        <div class="login-container">
+            <h2>Đăng nhập</h2>
+
+            <form id="login-form">
+                <div>
+                    <label>Email</label>
+                    <input
+                        type="email"
+                        id="email"
+                        placeholder="Nhập email"
+                    >
                 </div>
-            </div>
-        `;
-    },
 
-    init() {
-        document.body.classList.add('login-active');
+                <div>
+                    <label>Password</label>
+                    <input
+                        type="password"
+                        id="password"
+                        placeholder="Nhập password"
+                    >
+                </div>
 
-        const form = document.getElementById('loginForm');
-        const errorEl = document.getElementById('loginError');
-        const errorMessageEl = document.getElementById('loginErrorMessage');
-        const submitBtn = document.getElementById('btnLoginSubmit');
+                <button type="submit">
+                    Đăng nhập
+                </button>
+            </form>
 
-        form?.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('email').value.trim();
-            const password = document.getElementById('password').value;
+            <div id="login-error"></div>
+        </div>
+    `;
+};
 
-            if (errorEl) errorEl.style.display = 'none';
+const showPopupError = (message) => {
+    const errorElement = document.getElementById("login-error");
 
+    errorElement.textContent = message;
+};
 
+const handleLogin = async (e) => {
+    e.preventDefault();
 
-            // Show loading state
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> <span>Đang đăng nhập...</span>`;
-            }
+    const email = document
+        .getElementById("email")
+        .value
+        .trim();
 
-            try {
-                const data = await apiService.auth.login(email, password);
-                if (data && data.accessToken) {
-                    localStorage.setItem('API_TOKEN', data.accessToken);
-                    if (data.refreshToken) {
-                        localStorage.setItem('REFRESH_TOKEN', data.refreshToken);
-                    }
-                    document.body.classList.remove('login-active');
-                    window.router.navigate('/');
-                } else {
-                    throw new Error('Không nhận được token xác thực');
-                }
-            } catch (err) {
-                console.error('Lỗi đăng nhập:', err);
-                if (errorEl && errorMessageEl) {
-                    let msg = 'Tài khoản hoặc mật khẩu không đúng!';
-                    if (err.response?.data?.message) {
-                        msg = err.response.data.message;
-                    } else if (err.message) {
-                        msg = err.message;
-                    }
-                    errorMessageEl.textContent = msg;
-                    errorEl.style.display = 'flex';
-                    errorEl.classList.remove('shake');
-                    void errorEl.offsetWidth; // trigger reflow
-                    errorEl.classList.add('shake');
-                }
-            } finally {
-                if (submitBtn) {
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = `<span>Đăng Nhập</span> <i class="fas fa-arrow-right"></i>`;
-                }
-            }
+    const password = document
+        .getElementById("password")
+        .value
+        .trim();
+
+    // Validate
+    if (!email || !password) {
+        showPopupError(
+            "Email và mật khẩu không được để trống"
+        );
+        return;
+    }
+
+    try {
+        await login({
+            email,
+            password
         });
+
+        router.navigate("/dashboard");
+        console.log("Đăng nhập thành công");
+
+    } catch (error) {
+        showPopupError(
+            error.response?.data?.message ||
+            "Đăng nhập thất bại"
+        );
     }
 };
 
-export default LoginView;
+const init = () => {
+    const form = document.getElementById("login-form");
+
+    form.addEventListener(
+        "submit",
+        handleLogin
+    );
+};
+
+
+export default { render, init };

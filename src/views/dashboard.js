@@ -1,4 +1,7 @@
-import { apiService, formatCurrency, normalizeDate } from '../api.js';
+import orderService from '../services/orderService.js';
+import productService from '../services/productService.js';
+import { getAllCustomers } from '../api/customer-api.js';
+import { formatCurrency, normalizeDate } from '../utils/helpers.js';
 
 const DashboardView = {
     render() {
@@ -55,10 +58,11 @@ const DashboardView = {
     async init() {
         try {
             const [orders, , products] = await Promise.all([
-                apiService.orders.getAll(),
-                apiService.customers.getAll(),
-                apiService.products.getAll()
+                orderService.getAll(),
+                getAllCustomers(),
+                productService.getAll(),
             ]);
+
             this._renderStats(orders, products);
             this._renderTable(orders);
         } catch (err) {
@@ -74,13 +78,14 @@ const DashboardView = {
         const day = String(today.getDate()).padStart(2, '0');
         const todayStr = `${year}-${month}-${day}`;
 
+        // Doanh thu, đơn hàng mới trong ngày, hết hàng
         const doneOrders = orders.filter(o => o.status === 'done');
         const totalRevenue = doneOrders.reduce((sum, o) => {
             return sum + (o.product ? o.product.price * (o.amount || 1) : 0);
         }, 0);
-        
+
         const newOrdersCount = orders.filter(o => normalizeDate(o.date) === todayStr).length;
-        const outOfStock    = products.filter(p => (p.remaining ?? p.stock ?? 0) <= 0).length;
+        const outOfStock = products.filter(p => (p.remaining ?? p.stock ?? 0) <= 0).length;
 
         const pEls = document.querySelectorAll('#dashboard-stats .card p');
         if (pEls.length >= 3) {
@@ -98,12 +103,13 @@ const DashboardView = {
             pending: 'Chờ xử lý', approved: 'Đã duyệt',
             delivering: 'Đang giao', done: 'Hoàn thành', cancel: 'Đã hủy'
         };
+
         const STATUS_STYLE = {
-            pending:   { bg: '#fff3cd', color: '#856404' },
-            approved:  { bg: '#e0f2f1', color: '#00796b' },
-            delivering:{ bg: '#cce5ff', color: '#004085' },
-            done:      { bg: '#d4edda', color: '#155724' },
-            cancel:    { bg: '#f8d7da', color: '#721c24' }
+            pending:    { bg: '#fff3cd', color: '#856404' },
+            approved:   { bg: '#e0f2f1', color: '#00796b' },
+            delivering: { bg: '#cce5ff', color: '#004085' },
+            done:       { bg: '#d4edda', color: '#155724' },
+            cancel:     { bg: '#f8d7da', color: '#721c24' }
         };
 
         const recent = [...orders].sort((a, b) => b.id - a.id).slice(0, 10);
@@ -126,6 +132,7 @@ const DashboardView = {
             const tr = document.createElement('tr');
             tr.addEventListener('mouseenter', () => tr.style.background = '#f8f9fa');
             tr.addEventListener('mouseleave', () => tr.style.background = '');
+
             tr.innerHTML = `
                 <td><strong>#ORD-${order.id}</strong></td>
                 <td>${custName}</td>
@@ -143,6 +150,7 @@ const DashboardView = {
             p.textContent = 'Lỗi';
             p.style.color = '#e74c3c';
         });
+
         const tbody = document.getElementById('dashboardTbody');
         if (tbody) {
             tbody.innerHTML = `

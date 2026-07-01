@@ -1,4 +1,8 @@
-import { apiService, formatCurrency, normalizeDate, removeVietnameseTones } from '../api.js';
+import orderService from '../services/orderService.js';
+import productService from '../services/productService.js';
+import { getAllCustomers } from '../api/customer-api.js';
+import { formatCurrency, normalizeDate } from '../utils/helpers.js';
+import { removeVietnameseTones } from '../utils/validators.js';
 
 const STATUS_TEXT = {
     pending: 'Chờ xử lý',
@@ -6,6 +10,7 @@ const STATUS_TEXT = {
     done: 'Hoàn thành',
     cancel: 'Đã hủy'
 };
+
 const STATUS_BADGE = {
     pending: 'badge pending',
     delivering: 'badge shipping',
@@ -14,8 +19,13 @@ const STATUS_BADGE = {
 };
 
 const OrdersView = {
-    orders: [], customers: [], products: [],
-    activeTab: 'all', searchQuery: '', dateFilter: '',
+    orders: [],
+    customers: [],
+    products: [],
+
+    activeTab: 'all',
+    searchQuery: '',
+    dateFilter: '',
     selectedOrderDetail: null,
 
     render() {
@@ -70,7 +80,7 @@ const OrdersView = {
                 </div>
             </section>
 
-            <!-- Modal Chi tiết -->
+            <!-- Details Modal -->
             <div id="detailsModal" class="modal">
                 <div class="modal-content">
                     <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #eee;padding-bottom:15px;margin-bottom:20px;">
@@ -96,7 +106,7 @@ const OrdersView = {
                 </div>
             </div>
 
-            <!-- Modal Tạo đơn hàng -->
+            <!-- Create Modal -->
             <div id="createOrderModal" class="modal">
                 <div class="modal-content">
                     <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #eee;padding-bottom:15px;margin-bottom:20px;">
@@ -128,10 +138,9 @@ const OrdersView = {
         this.activeTab = 'all'; this.searchQuery = ''; this.dateFilter = '';
         this.selectedOrderDetail = null;
 
-        // Đăng ký lên window để các nút onclick inline gọi được
         window.OrdersView = this;
 
-        // Tabs
+        // Tab filters
         document.querySelectorAll('.tabs .tab').forEach((tab, i) => {
             tab.addEventListener('click', () => {
                 document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
@@ -141,23 +150,27 @@ const OrdersView = {
             });
         });
 
+        // Search & Date filters
         document.getElementById('orderSearchInput')?.addEventListener('input', e => {
-            this.searchQuery = e.target.value; this.filterAndRender();
+            this.searchQuery = e.target.value;
+            this.filterAndRender();
         });
-        document.getElementById('orderDateFilter')?.addEventListener('change', e => {
-            this.dateFilter = e.target.value; this.filterAndRender();
-        });
-        document.getElementById('btnExportExcel')?.addEventListener('click', () => this.exportToCSV());
 
-        // Create modal
+        document.getElementById('orderDateFilter')?.addEventListener('change', e => {
+            this.dateFilter = e.target.value;
+            this.filterAndRender();
+        });
+
+        // Create modal events
         document.getElementById('btnOpenCreateOrder')?.addEventListener('click', () => this.openCreateModal());
         document.getElementById('btnCloseCreateOrder')?.addEventListener('click', () => this.closeCreateModal());
         document.getElementById('btnCancelCreateOrder')?.addEventListener('click', () => this.closeCreateModal());
         document.getElementById('createOrderForm')?.addEventListener('submit', e => this.handleCreateOrder(e));
+
         document.getElementById('create-product-select')?.addEventListener('change', () => this.updateCreateTotal());
         document.getElementById('create-amount-input')?.addEventListener('input', () => this.updateCreateTotal());
 
-        // Details modal
+        // Details modal events
         document.getElementById('btnCloseDetails')?.addEventListener('click', () => this.closeDetailsModal());
         document.getElementById('btnCloseDetailsBtn')?.addEventListener('click', () => this.closeDetailsModal());
 
@@ -167,11 +180,14 @@ const OrdersView = {
     async loadInitialData() {
         try {
             const [orders, customers, products] = await Promise.all([
-                apiService.orders.getAll(),
-                apiService.customers.getAll(),
-                apiService.products.getAll()
+                orderService.getAll(),
+                getAllCustomers(),
+                productService.getAll()
             ]);
-            this.orders = orders || []; this.customers = customers || []; this.products = products || [];
+            this.orders = orders || [];
+            this.customers = customers || [];
+            this.products = products || [];
+
             this._renderStats();
             this.filterAndRender();
         } catch (e) {
@@ -205,6 +221,7 @@ const OrdersView = {
         if (!tbody) return;
 
         let list = [...this.orders];
+
         if (this.activeTab === 'pending') list = list.filter(o => o.status === 'pending');
         if (this.activeTab === 'shipping') list = list.filter(o => o.status === 'delivering');
         if (this.activeTab === 'completed') list = list.filter(o => o.status === 'done');
@@ -218,9 +235,11 @@ const OrdersView = {
                 return idMatch || nameMatch || phoneMatch;
             });
         }
+
         if (this.dateFilter) {
             list = list.filter(o => normalizeDate(o.date) === this.dateFilter);
         }
+
         list.sort((a, b) => b.id - a.id);
 
         tbody.innerHTML = '';
@@ -266,15 +285,18 @@ const OrdersView = {
     async updateOrderStatus(orderId, newStatus) {
         const order = this.orders.find(o => o.id === orderId);
         if (!order) return;
+
         if (newStatus === 'delivering') {
             const prod = this.products.find(p => p.id === order.product?.id);
             const stock = prod ? (prod.remaining ?? prod.stock ?? 0) : 0;
             if (prod && stock < (order.amount || 1)) {
-                alert(`Không đủ hàng! "${prod.name}" còn ${stock} sản phẩm.`); return;
+                alert(`Không đủ hàng! "${prod.name}" còn ${stock} sản phẩm.`);
+                return;
             }
         }
+
         try {
-            await apiService.orders.update(orderId, {
+            await orderService.update(orderId, {
                 productId: order.product?.id ?? 1,
                 customerId: order.customer?.id ?? 1,
                 amount: order.amount || 1,
@@ -282,7 +304,9 @@ const OrdersView = {
             });
             alert(`Đã cập nhật đơn hàng #${orderId}!`);
             await this.loadInitialData();
-        } catch (e) { alert('Lỗi cập nhật: ' + (e.response?.data?.message || e.message)); }
+        } catch (e) {
+            alert('Lỗi cập nhật: ' + (e.response?.data?.message || e.message));
+        }
     },
 
     async cancelOrder(id) {
@@ -311,6 +335,7 @@ const OrdersView = {
         statusSpan.textContent = STATUS_TEXT[order.status] || order.status;
         statusSpan.className = STATUS_BADGE[order.status] || 'badge';
         document.getElementById('detail-total-amount').textContent = formatCurrency(total);
+
         document.getElementById('detailsModal').style.display = 'flex';
     },
 
@@ -328,21 +353,26 @@ const OrdersView = {
         this.customers.forEach(c => {
             custSel.insertAdjacentHTML('beforeend', `<option value="${c.id}">${c.name} (${c.phone})</option>`);
         });
+
         prodSel.innerHTML = '<option value="">-- Chọn sản phẩm --</option>';
         this.products.forEach(p => {
             prodSel.insertAdjacentHTML('beforeend', `<option value="${p.id}">${p.name} - ${formatCurrency(p.price)}</option>`);
         });
+
         document.getElementById('create-amount-input').value = '1';
         document.getElementById('create-total-preview').textContent = '0đ';
         document.getElementById('createOrderModal').style.display = 'flex';
     },
 
-    closeCreateModal() { document.getElementById('createOrderModal').style.display = 'none'; },
+    closeCreateModal() {
+        document.getElementById('createOrderModal').style.display = 'none';
+    },
 
     updateCreateTotal() {
         const prodId = parseInt(document.getElementById('create-product-select').value);
         const qty = parseInt(document.getElementById('create-amount-input').value);
         const prod = this.products.find(p => p.id === prodId);
+
         document.getElementById('create-total-preview').textContent =
             (prod && !isNaN(qty) && qty > 0) ? formatCurrency(prod.price * qty) : '0đ';
     },
@@ -352,56 +382,28 @@ const OrdersView = {
         const custId = parseInt(document.getElementById('create-customer-select').value);
         const prodId = parseInt(document.getElementById('create-product-select').value);
         const amount = parseInt(document.getElementById('create-amount-input').value);
-        if (isNaN(custId) || isNaN(prodId) || isNaN(amount) || amount <= 0) {
-            alert('Vui lòng điền đầy đủ thông tin hợp lệ'); return;
-        }
-        const prod = this.products.find(p => p.id === prodId);
-        const stock = prod ? (prod.remaining ?? prod.stock ?? 0) : 0;
-        if (prod && stock < amount) {
-            alert(`Không đủ hàng! "${prod.name}" còn ${stock} sản phẩm.`); return;
-        }
-        try {
-            await apiService.orders.create({ productId: prodId, customerId: custId, amount, status: 'pending' });
-            this.closeCreateModal();
-            alert('Tạo đơn hàng thành công!');
-            await this.loadInitialData();
-        } catch (err) { alert('Không thể tạo đơn hàng: ' + (err.response?.data?.message || err.message)); }
-    },
 
-    exportToCSV() {
-        if (this.orders.length === 0) {
-            alert('Không có dữ liệu để xuất!');
+        if (isNaN(custId) || isNaN(prodId) || isNaN(amount) || amount <= 0) {
+            alert('Vui lòng điền đầy đủ thông tin hợp lệ');
             return;
         }
 
-        let csvContent = '\uFEFF';
-        csvContent += 'Mã Đơn,Khách Hàng,Số Điện Thoại,Sản Phẩm,Số Lượng,Đơn Giá,Tổng Tiền,Ngày Đặt,Trạng Thái\n';
+        const prod = this.products.find(p => p.id === prodId);
+        const stock = prod ? (prod.remaining ?? prod.stock ?? 0) : 0;
+        if (prod && stock < amount) {
+            alert(`Không đủ hàng! "${prod.name}" còn ${stock} sản phẩm.`);
+            return;
+        }
 
-        this.orders.forEach(order => {
-            const id = `#ORD-${order.id}`;
-            const custName = `"${(order.customer?.name ?? 'N/A').replace(/"/g, '""')}"`;
-            const custPhone = `'${order.customer?.phone ?? 'N/A'}`;
-            const prodName = `"${(order.product?.name ?? 'N/A').replace(/"/g, '""')}"`;
-            const amount = order.amount || 1;
-            const price = order.product?.price ?? 0;
-            const total = price * amount;
-            const dateStr = order.date ? new Date(normalizeDate(order.date)).toLocaleDateString('vi-VN') : '—';
-            const statusStr = STATUS_TEXT[order.status] || order.status;
-
-            csvContent += `${id},${csvName},${custPhone},${prodName},${amount},${price},${total},${dateStr},${statusStr}\n`;
-        });
-
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', `danh_sach_don_hang_${new Date().toISOString().split('T')[0]}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        try {
+            await orderService.create({ productId: prodId, customerId: custId, amount, status: 'pending' });
+            this.closeCreateModal();
+            alert('Tạo đơn hàng thành công!');
+            await this.loadInitialData();
+        } catch (err) {
+            alert('Không thể tạo đơn hàng: ' + (err.response?.data?.message || err.message));
+        }
     }
-
 };
 
 export default OrdersView;
