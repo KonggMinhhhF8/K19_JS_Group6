@@ -1,0 +1,125 @@
+:root {
+    --primary-color: #3498db;
+    --dark-color: #2c3e50;
+    --bg-color: #f4f7f6;
+    --success: #27ae60;
+    --border: #dcdde1;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+body { background-color: var(--bg-color); color: var(--dark-color); }
+.container { display: flex; min-height: 100vh; }
+
+/* Sidebar */
+.sidebar { width: 260px; background: var(--dark-color); color: white; padding: 25px; position: sticky; top: 0; height: 100vh; }
+.sidebar h2 { margin-bottom: 40px; text-align: center; color: var(--primary-color); }
+.sidebar ul { list-style: none; }
+.sidebar ul li { padding: 15px; cursor: pointer; border-radius: 8px; margin-bottom: 5px; color: #ecf0f1; }
+.sidebar ul li.active { background: #34495e; color: var(--primary-color); }
+
+/* Main Content */
+.main-content { flex: 1; padding: 40px; }
+.header-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+.btn-back { text-decoration: none; color: #7f8c8d; font-weight: 500; }
+
+/* Form Layout */
+.product-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 30px; }
+.form-card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+.form-card h3 { margin-bottom: 20px; font-size: 1.1rem; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+
+/* Input Styles */
+.form-group { margin-bottom: 20px; }
+.form-group label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9rem; }
+.form-group input, .form-group select, .form-group textarea {
+    width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; outline: none; transition: 0.3s;
+}
+.form-group input:focus { border-color: var(--primary-color); }
+
+/* Image Upload Box */
+.image-upload {
+    border: 2px dashed var(--border); border-radius: 12px; padding: 40px; text-align: center; cursor: pointer; transition: 0.3s;
+}
+.image-upload:hover { border-color: var(--primary-color); background: #f0f7ff; }
+.image-upload i { font-size: 2rem; color: #bdc3c7; margin-bottom: 10px; }
+.preview-img { width: 100%; margin-top: 15px; border-radius: 8px; display: none; }
+
+/* Footer Actions */
+.form-footer {
+    margin-top: 20px; display: flex; justify-content: flex-end; gap: 15px; padding: 20px; background: white; border-radius: 12px;
+}
+.btn { padding: 12px 25px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; }
+.btn-save { background: var(--success); color: white; }
+.btn-cancel { background: #eee; color: #7f8c8d; }
+
+/* Login Form */
+.login-container {
+    background: white;
+    width: 100%;
+    max-width: 400px;
+    margin: 80px auto;
+    padding: 40px 30px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); /* Bóng đổ nhẹ nhàng giống form-card */
+}
+
+.login-container h2 {
+    text-align: center;
+    color: var(--dark-color);
+    margin-bottom: 30px;
+    font-size: 1.8rem;
+    font-weight: 600;
+}
+
+#login-form div {
+    margin-bottom: 20px;
+}
+
+#login-form label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--dark-color);
+}
+
+#login-form input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    outline: none;
+    transition: 0.3s;
+    font-size: 0.95rem;
+}
+
+#login-form input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+#login-form button[type="submit"] {
+    width: 100%;
+    padding: 14px;
+    margin-top: 10px;
+    border-radius: 8px;
+    border: none;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    background: var(--primary-color);
+    color: white;
+    transition: 0.3s background;
+}
+
+#login-form button[type="submit"]:hover {
+    background: #2980b9; /* Màu primary tối đi một chút khi hover */
+}
+
+/* Style cho thông báo lỗi */
+#login-error {
+    color: #e74c3c;
+    text-align: center;
+    margin-top: 15px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    min-height: 20px; /* Giữ sẵn khoảng trống để form không bị giật khi hiện lỗi */
+}
