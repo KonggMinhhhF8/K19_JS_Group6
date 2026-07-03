@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "axios": "latest",
+    "chart.js": "latest",
     "navigo": "latest"
   },
   "devDependencies": {

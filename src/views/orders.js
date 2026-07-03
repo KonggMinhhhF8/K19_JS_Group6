@@ -1,12 +1,16 @@
-export function renderOrdersPage(root) {
-    root.innerHTML = `
+const render = () => {
+    return `
     <div class="page-header">
       <h2>Đơn hàng</h2>
     </div>
 
     <section class="card">
-      <h3>Orders</h3>
+      <h3>Order</h3>
       <p>Trang này của thành viên khác.</p>
     </section>
   `;
-}
+};
+
+export default {
+    render,
+};

@@ -1,36 +1,23 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8" />
-
-  <meta
-          name="viewport"
-          content="width=device-width, initial-scale=1.0"
-  />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <title>ShopAdmin</title>
 
-  <!-- Font Awesome Icons -->
   <link
           rel="stylesheet"
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
-  />
+  >
 </head>
 
 <body>
 <div class="container">
-  <!--
-    SIDEBAR
-   -->
   <aside class="sidebar">
     <h2>ShopAdmin</h2>
 
-    <!--
-      MAIN NAVIGATION
-      data-navigo dùng để Navigo bắt route SPA,
-      tránh reload lại toàn bộ trang.
-     -->
-    <ul>
+    <ul class="menu">
       <li>
         <a href="/dashboard" data-navigo>
           <i class="fas fa-home"></i>
@@ -67,46 +54,17 @@
       </li>
     </ul>
 
-    <!--
-      LOGOUT BUTTON
-      main.js sẽ bắt button này bằng id="logoutButton".
-      Khi logout:
-      - Xóa accessToken
-      - Xóa refreshToken
-      - Điều hướng về /login
- -->
     <div class="sidebar-footer">
-      <button
-              type="button"
-              id="logoutButton"
-              class="logout-btn"
-      >
+      <a href="/login" id="logout-btn" class="logout-btn">
         <i class="fas fa-sign-out-alt"></i>
         Đăng xuất
-      </button>
+      </a>
     </div>
   </aside>
 
-  <!--
-    MAIN APP ROOT
-    Tất cả page sẽ được render vào đây:
-    - /login
-    - /dashboard
-    - /products
-    - /orders
-    - /customers
-    - /customers/create
-    - /customers/edit/:id
-    - /reports
- -->
   <main id="app" class="main-content"></main>
 </div>
 
-<!--
-  VITE ENTRY FILE
-  main.js sẽ import style.css, config Navigo router,
-  route guard login/logout và render từng view.
- -->
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>

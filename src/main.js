@@ -1,197 +1,127 @@
-import Navigo from "navigo";
+import router from "./router/index.js";
+
+import loginPage from "./views/login.js";
+import dashboardPage from "./views/dashboard.js";
+import customerPage from "./views/customers.js";
+import productPage from "./views/products.js";
+import orderPage from "./views/orders.js";
+import reportPage from "./views/reports.js";
+
+import helpers from "./utils/helpers.js";
+import { authGuard } from "./router/guards.js";
+import { logout } from "./services/authService.js";
 
 import "./style.css";
 
-import {
-    isAuthenticated,
-    clearAuthSession,
-} from "./api.js";
+const logoutBtn = document.getElementById("logout-btn");
 
-import { renderLoginPage } from "./views/login.js";
-import { renderDashboardPage } from "./views/dashboard.js";
-import { renderProductsPage } from "./views/products.js";
-import { renderOrdersPage } from "./views/orders.js";
-import {
-    renderCustomersPage,
-    renderCustomerCreatePage,
-    renderCustomerEditPage,
-} from "./views/customers.js";
-import { renderReportsPage } from "./views/reports.js";
+// ======================================================
+// LOGOUT EVENT
+// ======================================================
 
-const app = document.getElementById("app");
+if (logoutBtn) {
+    logoutBtn.addEventListener("click", (event) => {
+        event.preventDefault();
 
-const logoutButton =
-    document.getElementById("logoutButton") ||
-    document.getElementById("logout-btn");
+        const confirmed = confirm("Bạn có chắc chắn muốn đăng xuất không?");
 
-const router = new Navigo("/", {
-    linksSelector: "a[data-navigo]",
-});
-
-// SIDEBAR ACTIVE
-
-function setActiveSidebar(currentPath) {
-    const links = document.querySelectorAll(".sidebar a");
-
-    links.forEach(function (link) {
-        const listItem = link.closest("li");
-        const href = link.getAttribute("href");
-
-        if (!listItem) {
+        if (!confirmed) {
             return;
         }
 
-        listItem.classList.toggle("active", currentPath.startsWith(href));
+        logout();
     });
 }
 
-// AUTH UI
-
-function updateAuthUI() {
-    const sidebar = document.querySelector(".sidebar");
-
-    if (sidebar) {
-        sidebar.style.display = isAuthenticated() ? "flex" : "none";
-    }
-
-    if (logoutButton) {
-        logoutButton.style.display = isAuthenticated() ? "flex" : "none";
-    }
-
-    document.body.classList.toggle("is-logged-out", !isAuthenticated());
-}
-
-// LOGOUT
-
-function handleLogout() {
-    const confirmed = confirm("Bạn có chắc chắn muốn đăng xuất không?");
-
-    if (!confirmed) {
-        return;
-    }
-
-    clearAuthSession();
-    updateAuthUI();
-    router.navigate("/login");
-}
-
-if (logoutButton) {
-    logoutButton.addEventListener("click", handleLogout);
-}
-
-// ROUTE GUARD
-
-function renderProtectedPage(activePath, callback) {
-    if (!isAuthenticated()) {
-        router.navigate("/login");
-        return;
-    }
-
-    setActiveSidebar(activePath);
-    updateAuthUI();
-
-    callback();
-
-    router.updatePageLinks();
-}
-
-function renderPublicPage(callback) {
-    setActiveSidebar("");
-    updateAuthUI();
-
-    callback();
-
-    router.updatePageLinks();
-}
-
+// ======================================================
 // ROUTES
+// ======================================================
 
-router.on("/", function () {
-    if (isAuthenticated()) {
-        router.navigate("/customers");
-    } else {
-        router.navigate("/login");
-    }
-});
+router
+    .on("/", () => {
+        helpers.loadPage(loginPage, false);
+    })
 
-router.on("/login", function () {
-    if (isAuthenticated()) {
-        router.navigate("/customers");
-        return;
-    }
+    .on("/login", () => {
+        helpers.loadPage(loginPage, false);
+    })
 
-    renderPublicPage(function () {
-        renderLoginPage(app, router);
-    });
-});
+    .on("/dashboard", () => {
+        if (!authGuard()) return;
 
-router.on("/dashboard", function () {
-    renderProtectedPage("/dashboard", function () {
-        renderDashboardPage(app);
-    });
-});
+        helpers.loadPage(dashboardPage, true);
+    })
 
-router.on("/products", function () {
-    renderProtectedPage("/products", function () {
-        renderProductsPage(app);
-    });
-});
+    .on("/products", () => {
+        if (!authGuard()) return;
 
-router.on("/orders", function () {
-    renderProtectedPage("/orders", function () {
-        renderOrdersPage(app);
-    });
-});
+        helpers.loadPage(productPage, true);
+    })
 
-router.on("/customers", function () {
-    renderProtectedPage("/customers", function () {
-        renderCustomersPage(app, router);
-    });
-});
+    .on("/orders", () => {
+        if (!authGuard()) return;
 
-router.on("/customers/create", function () {
-    renderProtectedPage("/customers", function () {
-        renderCustomerCreatePage(app, router);
-    });
-});
+        helpers.loadPage(orderPage, true);
+    })
 
-router.on("/customers/edit/:id", function (match) {
-    renderProtectedPage("/customers", function () {
-        renderCustomerEditPage(app, router, match.data.id);
-    });
-});
+    .on("/customers", () => {
+        if (!authGuard()) return;
 
-router.on("/reports", function () {
-    renderProtectedPage("/reports", function () {
-        renderReportsPage(app);
-    });
-});
+        customerPage.mode = "list";
+        customerPage.customerId = null;
 
-router.notFound(function () {
-    if (!isAuthenticated()) {
-        router.navigate("/login");
-        return;
-    }
+        helpers.loadPage(customerPage, true);
+    })
 
-    app.innerHTML = `
-    <div class="page-header">
-      <h2>404 - Không tìm thấy trang</h2>
+    .on("/customers/create", () => {
+        if (!authGuard()) return;
 
-      <a href="/customers" class="btn-secondary" data-navigo>
-        <i class="fas fa-arrow-left"></i>
-        Quay lại Customers
-      </a>
-    </div>
+        customerPage.mode = "create";
+        customerPage.customerId = null;
 
-    <section class="card">
-      <h3>Trang không tồn tại</h3>
-      <p>Vui lòng chọn chức năng khác trong menu.</p>
-    </section>
-  `;
+        helpers.loadPage(customerPage, true);
+    })
 
-    updateAuthUI();
-    router.updatePageLinks();
-});
+    .on("/customers/edit/:id", (match) => {
+        if (!authGuard()) return;
 
-updateAuthUI();
-router.resolve();
+        customerPage.mode = "edit";
+        customerPage.customerId = match.data.id;
+
+        helpers.loadPage(customerPage, true);
+    })
+
+    .on("/reports", () => {
+        if (!authGuard()) return;
+
+        helpers.loadPage(reportPage, true);
+    })
+
+    .notFound(() => {
+        if (!authGuard()) return;
+
+        helpers.loadPage(
+            {
+                render: () => {
+                    return `
+            <div class="page-header">
+              <h2>404 - Không tìm thấy trang</h2>
+
+              <a href="/customers" class="btn-secondary" data-navigo>
+                <i class="fas fa-arrow-left"></i>
+                Quay lại Customers
+              </a>
+            </div>
+
+            <section class="card">
+              <h3>Trang không tồn tại</h3>
+              <p>Vui lòng chọn chức năng khác trong menu.</p>
+            </section>
+          `;
+                },
+            },
+            true
+        );
+    })
+
+    .resolve();
