@@ -202,6 +202,31 @@ const OrdersView = {
         }
     },
 
+    // ==========================================================================
+    // LOGIC ĐỒNG BỘ TỒN KHO TRỰC TIẾP LÊN MÁY CHỦ
+    // ==========================================================================
+    async syncInventory(product, amountChange) {
+        if (!product) return;
+        const currentStock = Number(product.remaining ?? product.stock ?? 0);
+        const newRemaining = currentStock + amountChange;
+
+        // Xây dựng lại payload chuẩn khớp với form products để không bị mất dữ liệu cũ
+        const payload = {
+            categoryId: product.category?.id || product.categoryId || 1,
+            imageId: product.imageId || product.imageUrl || "",
+            name: product.name || "Sản phẩm",
+            sku: product.sku || "",
+            price: Number(product.price || 0),
+            remaining: newRemaining < 0 ? 0 : newRemaining // Ép không cho phép tồn kho âm
+        };
+
+        try {
+            await productService.update(product.id, payload);
+        } catch (error) {
+            console.error("Lỗi đồng bộ tồn kho ngầm:", error);
+        }
+    },
+
     _renderStats() {
         const totalEl = document.getElementById('statTotalOrders');
         const pendingEl = document.getElementById('statPendingOrders');
@@ -257,6 +282,7 @@ const OrdersView = {
             let actions = `
                 <button class="btn-icon" onclick="OrdersView.viewOrderDetails(${order.id})" title="Xem chi tiết"><i class="fas fa-eye"></i></button>
             `;
+            // Cấu trúc chống click đúp cho việc hủy đơn
             if (order.status === 'pending') {
                 actions += `
                     <button class="btn-icon" onclick="OrdersView.updateOrderStatus(${order.id},'delivering')" style="color:var(--info);" title="Giao hàng"><i class="fas fa-truck"></i></button>
@@ -284,16 +310,7 @@ const OrdersView = {
 
     async updateOrderStatus(orderId, newStatus) {
         const order = this.orders.find(o => o.id === orderId);
-        if (!order) return;
-
-        if (newStatus === 'delivering') {
-            const prod = this.products.find(p => String(p.id) === String(order.product?.id));
-            const stock = prod ? (prod.remaining ?? prod.stock ?? 0) : 0;
-            if (prod && stock < (order.amount || 1)) {
-                alert(`Không đủ hàng! "${prod.name}" còn ${stock} sản phẩm.`);
-                return;
-            }
-        }
+        if (!order || order.status === newStatus) return; // Chống bấm nhiều lần gây nhiễu
 
         try {
             await orderService.update(orderId, {
@@ -302,14 +319,21 @@ const OrdersView = {
                 amount: order.amount || 1,
                 status: newStatus
             });
-            await this.loadInitialData(); // Load lại data từ cache/API
+
+            // Nếu đơn hàng bị HỦY, lấy số lượng hoàn trả CỘNG (+) ngược lại vào kho
+            if (newStatus === 'cancel') {
+                const prod = this.products.find(p => String(p.id) === String(order.product?.id));
+                await this.syncInventory(prod, Number(order.amount || 1));
+            }
+
+            await this.loadInitialData(); // Load lại data mới bao gồm cả tồn kho và đơn hàng
         } catch (e) {
             alert('Lỗi cập nhật: ' + (e.response?.data?.message || e.message));
         }
     },
 
     async cancelOrder(id) {
-        if (!confirm(`Bạn có chắc chắn muốn hủy đơn hàng #${id}?`)) return;
+        if (!confirm(`Bạn có chắc chắn muốn hủy đơn hàng #${id}? (Số lượng sản phẩm sẽ được cộng trả lại vào kho)`)) return;
         await this.updateOrderStatus(id, 'cancel');
     },
 
@@ -355,7 +379,7 @@ const OrdersView = {
 
         prodSel.innerHTML = '<option value="">-- Chọn sản phẩm --</option>';
         this.products.forEach(p => {
-            prodSel.insertAdjacentHTML('beforeend', `<option value="${p.id}">${p.name} - ${formatCurrency(p.price)}</option>`);
+            prodSel.insertAdjacentHTML('beforeend', `<option value="${p.id}">${p.name} - ${formatCurrency(p.price)} (Tồn: ${p.remaining ?? p.stock ?? 0})</option>`);
         });
 
         document.getElementById('create-amount-input').value = '1';
@@ -388,9 +412,11 @@ const OrdersView = {
         }
 
         const prod = this.products.find(p => String(p.id) === String(prodId));
-        const stock = prod ? (prod.remaining ?? prod.stock ?? 0) : 0;
+        const stock = prod ? (Number(prod.remaining ?? prod.stock ?? 0)) : 0;
+
+        // Khóa giao dịch nếu không đủ tồn kho
         if (prod && stock < amount) {
-            alert(`Không đủ hàng! "${prod.name}" còn ${stock} sản phẩm.`);
+            alert(`Giao dịch thất bại! "${prod.name}" chỉ còn lại ${stock} sản phẩm trong kho.`);
             return;
         }
 
@@ -399,13 +425,18 @@ const OrdersView = {
             btnSubmit.disabled = true;
             btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang lưu...';
 
+            // 1. Tạo đơn hàng mới đẩy lên server
             await orderService.create({ productId: Number(prodId), customerId: Number(custId), amount, status: 'pending' });
+
+            // 2. Lấy số lượng vừa đặt TRỪ (-) đi trong tồn kho
+            await this.syncInventory(prod, -amount);
 
             this.closeCreateModal();
             btnSubmit.disabled = false;
             btnSubmit.innerHTML = '<i class="fas fa-save"></i> Lưu đơn hàng';
 
-            await this.loadInitialData(); // Load lại data từ cache bị xóa sau khi create
+            // 3. Tải lại danh sách (chứa cả số liệu kho mới) để update UI
+            await this.loadInitialData();
         } catch (err) {
             alert('Không thể tạo đơn hàng: ' + (err.response?.data?.message || err.message));
         }
